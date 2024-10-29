@@ -25,8 +25,8 @@
 
 ## 运行
 
-1. ./mvnw clean package
-2. java -cp "target/matpower-web-0.0.1-SNAPSHOT.jar:lib/*" -Dserver.port=8081 org.springframework.boot.loader.JarLauncher
+1. `./mvnw clean package`
+2. `java -cp "target/matpower-web-0.0.1-SNAPSHOT.jar:lib/*" -Dserver.port=8081 org.springframework.boot.loader.JarLauncher`
 
 ## 返回值
 
