@@ -1,5 +1,8 @@
 package tk.amrom.matpowerweb.controller;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -19,14 +22,23 @@ import com.mathworks.toolbox.javabuilder.MWException;
 import com.mathworks.toolbox.javabuilder.MWNumericArray;
 
 import tk.amrom.matpower.LoadCase;
+import tk.amrom.matpowerweb.MatpowerWebApplication;
 
 @RestController
 @RequestMapping("/v1/common")
 public class CommonController {
 
+    private final MatpowerWebApplication mySpringBootApplication;
+
+    public CommonController(MatpowerWebApplication mySpringBootApplication) {
+        this.mySpringBootApplication = mySpringBootApplication;
+    }
+
     @PostMapping("/loadcase")
     @ResponseBody
     public ResponseEntity<String>  loadCase(@RequestParam(value = "pdValues", required = false) double[] pdValues){
+        //清空上次输出缓存
+        mySpringBootApplication.clearCapturedConsoleOutput();
         // double[] initPdValues = { 55, 3, 41, 0, 13, 75, 0, 150, 121, 5, 0, 377, 18, 10.5, 22, 43, 42,
         //     27.2, 3.3, 2.3, 0, 0, 6.3, 0, 6.3, 0, 9.3, 4.6, 17, 3.6, 5.8, 1.6,
         //     3.8, 0, 6, 0, 0, 14, 0, 0, 6.3, 7.1, 2, 12, 0, 0, 29.7, 0, 18,
@@ -46,14 +58,18 @@ public class CommonController {
 
             LoadCase loadCase = new LoadCase();
 
-            
-
             MWNumericArray mwPdValues = new MWNumericArray(pdValues, MWClassID.DOUBLE);
             Object[] element = loadCase.LoadCase(1, mwPdValues);
+            // 确保输出流被刷新
+            System.out.flush();
             if (element[0] instanceof MWStructArray) {
-                MWStructArray structArray = (MWStructArray) element[0];
-                JsonObject jsonObject = parseResult(structArray, 1);
-                return ResponseEntity.ok(jsonObject.toString());
+                // MWStructArray structArray = (MWStructArray) element[0];
+                // JsonObject jsonObject = parseResult(structArray, 1);
+                // return ResponseEntity.ok(jsonObject.toString());
+                String input = mySpringBootApplication.getCapturedConsoleOutput();
+                String branchData = extractBranchData(input);
+
+                return ResponseEntity.ok().body(branchData);
             }
 
             mwPdValues.dispose();
@@ -65,6 +81,30 @@ public class CommonController {
         }
 
         return ResponseEntity.status(HttpStatus.FAILED_DEPENDENCY).body("出错了2");
+    }
+
+    public static String extractBranchData(String input) {
+        // 使用正则表达式找到 "Branch Data" 开始的位置
+        Pattern pattern = Pattern.compile("Branch Data(.*)", Pattern.DOTALL);
+        Matcher matcher = pattern.matcher(input);
+
+        if (matcher.find()) {
+            // 获取 "Branch Data" 后的所有内容
+            String branchSection = matcher.group(1).trim();
+
+            // 去掉头三行（分隔符和表头行）
+            String[] lines = branchSection.split("\n");
+            StringBuilder cleanedData = new StringBuilder();
+
+            // 跳过前三行，并将其余的行重新组合
+            for (int i = 3; i < lines.length; i++) {
+                cleanedData.append(lines[i]).append("\n");
+            }
+
+            return cleanedData.toString().trim();
+        } else {
+            return "Branch Data not found";
+        }
     }
 
     // 主方法 - 解析 Matlab 结果结构并构造 JSON 对象
